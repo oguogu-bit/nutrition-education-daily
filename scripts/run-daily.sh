@@ -148,6 +148,22 @@ run_claude_with_retry() {
   return 1
 }
 
+# ── バックフィル: 過去7日の欠損ファイルを自動補完 ──────────
+# DATE_OVERRIDEなしの通常実行時のみ実行（再帰呼び出し防止）
+if [ -z "${DATE_OVERRIDE:-}" ]; then
+  for i in 7 6 5 4 3 2 1; do
+    past_date=$(date -v-${i}d +%Y-%m-%d)
+    past_year="${past_date:0:4}"
+    past_month="${past_date:5:2}"
+    past_file="$REPO_DIR/$past_year/$past_month/$past_date.md"
+    if [ ! -f "$past_file" ]; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] [BACKFILL] $past_date の欠損を検出 — 自動生成開始" | tee -a "$LOG_DIR/daily.log"
+      DATE_OVERRIDE="$past_date" bash "$SCRIPT_DIR/run-daily.sh" >> "$LOG_DIR/daily.log" 2>> "$LOG_DIR/error.log" \
+        || echo "[$(date '+%Y-%m-%d %H:%M:%S')] [BACKFILL ERROR] $past_date の自動バックフィル失敗" >> "$LOG_DIR/error.log"
+    fi
+  done
+fi
+
 # ── 日次コンテンツ生成 ──────────────────────────────────
 
 if [ -f "$OUTPUT_FILE" ]; then
